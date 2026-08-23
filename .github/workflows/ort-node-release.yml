@@ -1,0 +1,238 @@
+name: Build and publish custom ORT Node
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: npm package version
+        required: true
+        default: 1.29.0
+        type: string
+      npm_tag:
+        description: npm dist-tag
+        required: true
+        default: latest
+        type: string
+      publish:
+        description: Publish to npm after all builds pass
+        required: true
+        default: false
+        type: boolean
+  push:
+    tags:
+      - ort-node-v*
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "24"
+  BUILD_CONFIG: Release
+  NPM_PACKAGE_NAME: "@chthollyphile/onnxruntime-node-folia"
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}-${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            platform: linux
+            arch: x64
+            build_args: ""
+          - runner: ubuntu-22.04-arm
+            platform: linux
+            arch: arm64
+            build_args: ""
+          - runner: windows-2025
+            platform: win32
+            arch: x64
+            build_args: ""
+          - runner: windows-11-arm
+            platform: win32
+            arch: arm64
+            build_args: --arm64
+          - runner: macos-15-intel
+            platform: darwin
+            arch: x64
+            build_args: --cmake_extra_defines CMAKE_OSX_ARCHITECTURES=x86_64
+          - runner: macos-15
+            platform: darwin
+            arch: arm64
+            build_args: --cmake_extra_defines CMAKE_OSX_ARCHITECTURES=arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 240
+    env:
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.platform == 'darwin' && '14.0' || '' }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Build CPU Node binding
+        shell: bash
+        run: >-
+          python tools/ci_build/build.py
+          --build_dir build
+          --config "${BUILD_CONFIG}"
+          --update
+          --build
+          --parallel
+          --skip_tests
+          --build_shared_lib
+          --build_nodejs
+          ${{ matrix.build_args }}
+
+      - name: Test Node binding
+        shell: bash
+        run: npm --prefix js/node test -- --timeout=90000
+
+      - name: Stage native files
+        shell: bash
+        run: |
+          source_dir="js/node/bin/napi-v6/${{ matrix.platform }}/${{ matrix.arch }}"
+          target_dir="package-artifact/napi-v6/${{ matrix.platform }}/${{ matrix.arch }}"
+          test -f "${source_dir}/onnxruntime_binding.node"
+          mkdir -p "${target_dir}"
+          cp -L "${source_dir}/onnxruntime_binding.node" "${target_dir}/"
+          case "${{ matrix.platform }}" in
+            linux)
+              cp -L "${source_dir}/libonnxruntime.so.1" "${target_dir}/"
+              ;;
+            win32)
+              cp -L "${source_dir}/onnxruntime.dll" "${target_dir}/"
+              ;;
+            darwin)
+              ort_version="$(tr -d '\r\n' < VERSION_NUMBER)"
+              cp -L "${source_dir}/libonnxruntime.${ort_version}.dylib" "${target_dir}/"
+              ;;
+          esac
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: native-${{ matrix.platform }}-${{ matrix.arch }}
+          path: package-artifact
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    name: Assemble npm package
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      npm_tag: ${{ steps.metadata.outputs.npm_tag }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: native-*
+          path: js/node/bin
+          merge-multiple: true
+
+      - name: Resolve package metadata
+        id: metadata
+        shell: bash
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+          DISPATCH_NPM_TAG: ${{ inputs.npm_tag }}
+        run: |
+          version="${DISPATCH_VERSION}"
+          npm_tag="${DISPATCH_NPM_TAG:-latest}"
+          if [[ "${GITHUB_REF}" == refs/tags/ort-node-v* ]]; then
+            version="${GITHUB_REF_NAME#ort-node-v}"
+          fi
+          printf 'version=%s\n' "${version}" >> "${GITHUB_OUTPUT}"
+          printf 'npm_tag=%s\n' "${npm_tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build JavaScript and TypeScript files
+        shell: bash
+        run: |
+          npm ci --prefix js
+          npm ci --prefix js/common
+          npm ci --prefix js/node
+
+      - name: Configure and pack npm package
+        shell: bash
+        env:
+          PACKAGE_VERSION: ${{ steps.metadata.outputs.version }}
+        run: |
+          for target in \
+            linux/x64 linux/arm64 \
+            win32/x64 win32/arm64 \
+            darwin/x64 darwin/arm64; do
+            test -f "js/node/bin/napi-v6/${target}/onnxruntime_binding.node"
+          done
+          test -f js/node/bin/napi-v6/linux/x64/libonnxruntime.so.1
+          test -f js/node/bin/napi-v6/linux/arm64/libonnxruntime.so.1
+          test -f js/node/bin/napi-v6/win32/x64/onnxruntime.dll
+          test -f js/node/bin/napi-v6/win32/arm64/onnxruntime.dll
+          ort_version="$(tr -d '\r\n' < VERSION_NUMBER)"
+          test -f "js/node/bin/napi-v6/darwin/x64/libonnxruntime.${ort_version}.dylib"
+          test -f "js/node/bin/napi-v6/darwin/arm64/libonnxruntime.${ort_version}.dylib"
+          cd js/node
+          npm pkg set \
+            "name=${NPM_PACKAGE_NAME}" \
+            "repository.url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          npm version "${PACKAGE_VERSION}" --no-git-tag-version --allow-same-version
+          mkdir -p "${GITHUB_WORKSPACE}/npm-package"
+          npm pack --pack-destination "${GITHUB_WORKSPACE}/npm-package"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm-package-${{ steps.metadata.outputs.version }}
+          path: npm-package/*.tgz
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish to npm
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/ort-node-v') || inputs.publish == true
+    runs-on: ubuntu-24.04
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-package-${{ needs.package.outputs.version }}
+          path: npm-package
+
+      - name: Publish package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: >-
+          npm publish npm-package/*.tgz
+          --access public
+          --tag "${{ needs.package.outputs.npm_tag }}"

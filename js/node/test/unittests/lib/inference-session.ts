@@ -411,6 +411,20 @@ describe('UnitTests - InferenceSession.SessionOptions', () => {
     });
   });
 
+  describe('enableMemReuse', () => {
+    it('BAD CALL - type mismatch', async () => {
+      await assert.rejects(
+        async () => {
+          await createAny(modelPath, { enableMemReuse: 0 });
+        },
+        { name: 'TypeError', message: /enableMemReuse/ },
+      );
+    });
+    it('enableMemReuse = false', async () => {
+      await createAny(modelPath, { enableMemReuse: false });
+    });
+  });
+
   describe('executionMode', () => {
     it('BAD CALL - type mismatch', async () => {
       await assert.rejects(

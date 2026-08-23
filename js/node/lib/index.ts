@@ -7,6 +7,21 @@ import { registerBackend, env } from 'onnxruntime-common';
 import { version } from './version';
 import { onnxruntimeBackend, listSupportedBackends } from './backend';
 
+declare module 'onnxruntime-common' {
+  namespace InferenceSession {
+    interface SessionOptions {
+      /**
+       * Whether to reuse memory allocated by the execution plan.
+       *
+       * This setting is available only in this custom ONNX Runtime Node.js binding.
+       *
+       * @default true
+       */
+      enableMemReuse?: boolean;
+    }
+  }
+}
+
 const backends = listSupportedBackends();
 for (const backend of backends) {
   registerBackend(backend.name, onnxruntimeBackend, 100);
