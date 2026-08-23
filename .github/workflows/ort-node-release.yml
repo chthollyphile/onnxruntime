@@ -45,7 +45,7 @@ jobs:
             platform: linux
             arch: arm64
             build_args: ""
-          - runner: windows-2025
+          - runner: windows-2022
             platform: win32
             arch: x64
             build_args: ""
