@@ -668,6 +668,10 @@ static const char* const kOrtSessionOptionsConfigEnableCpuMemArena = "session.en
 // Equivalent to OrtApi::DisableMemPattern / OrtApi::EnableMemPattern.
 static const char* const kOrtSessionOptionsConfigEnableMemPattern = "session.enable_mem_pattern";
 
+// Enable or disable memory reuse during memory planning for a session.
+// "0": disable; "1": enable.
+static const char* const kOrtSessionOptionsConfigEnableMemReuse = "session.enable_mem_reuse";
+
 // Session log identifier.
 // Value should be a UTF-8 string.
 // Equivalent to OrtApi::SetSessionLogId.

@@ -288,6 +288,7 @@ enum class SessionOptionSetterKind {
   kInterOpNumThreads,
   kEnableCpuMemArena,
   kEnableMemPattern,
+  kEnableMemReuse,
   kSessionLogId,
   kLogSeverityLevel,
   kLogVerbosityLevel,
@@ -309,6 +310,7 @@ static const KnownSessionOption kKnownSessionOptions[] = {
     {kOrtSessionOptionsConfigInterOpNumThreads, SessionOptionSetterKind::kInterOpNumThreads},
     {kOrtSessionOptionsConfigEnableCpuMemArena, SessionOptionSetterKind::kEnableCpuMemArena},
     {kOrtSessionOptionsConfigEnableMemPattern, SessionOptionSetterKind::kEnableMemPattern},
+    {kOrtSessionOptionsConfigEnableMemReuse, SessionOptionSetterKind::kEnableMemReuse},
     {kOrtSessionOptionsConfigLogId, SessionOptionSetterKind::kSessionLogId},
     {kOrtSessionOptionsConfigLogSeverityLevel, SessionOptionSetterKind::kLogSeverityLevel},
     {kOrtSessionOptionsConfigLogVerbosityLevel, SessionOptionSetterKind::kLogVerbosityLevel},
@@ -442,6 +444,12 @@ ORT_API_STATUS_IMPL(OrtApis::AddSessionConfigEntry, _Inout_ OrtSessionOptions* o
       bool v = false;
       if (auto* st = ParseBool(config_key, config_value, v); st != nullptr) return st;
       return v ? OrtApis::EnableMemPattern(options) : OrtApis::DisableMemPattern(options);
+    }
+    case SessionOptionSetterKind::kEnableMemReuse: {
+      bool v = false;
+      if (auto* st = ParseBool(config_key, config_value, v); st != nullptr) return st;
+      options->value.enable_mem_reuse = v;
+      return nullptr;
     }
     case SessionOptionSetterKind::kSessionLogId:
       return OrtApis::SetSessionLogId(options, config_value);

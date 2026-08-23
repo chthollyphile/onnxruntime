@@ -9,7 +9,7 @@
 #include <filesystem>
 
 #include "common.h"
-#include "core/session/abi_session_options_impl.h"
+#include "onnxruntime_session_options_config_keys.h"
 #include "session_options_helper.h"
 #include "tensor_helper.h"
 #ifdef USE_CUDA
@@ -268,9 +268,8 @@ void ParseSessionOptions(const Napi::Object options, Ort::SessionOptions& sessio
     auto enableMemReuseValue = options.Get("enableMemReuse");
     ORT_NAPI_THROW_TYPEERROR_IF(!enableMemReuseValue.IsBoolean(), options.Env(),
                                 "Invalid argument: sessionOptions.enableMemReuse must be a boolean value.");
-    // There is no public C API setter for enable_mem_reuse. The Node binding is built in-tree against this ORT ABI.
-    static_cast<OrtSessionOptions*>(sessionOptions)->value.enable_mem_reuse =
-        enableMemReuseValue.As<Napi::Boolean>().Value();
+    sessionOptions.AddConfigEntry(kOrtSessionOptionsConfigEnableMemReuse,
+                                  enableMemReuseValue.As<Napi::Boolean>().Value() ? "1" : "0");
   }
 
   // optimizedModelFilePath

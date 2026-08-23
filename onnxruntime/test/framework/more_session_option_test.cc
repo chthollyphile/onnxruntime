@@ -50,7 +50,7 @@ const char* MsgOf(OrtStatus* st) { return Api().GetErrorMessage(st); }
 
 // -----------------------------------------------------------------------------
 // Bool-valued keys: session.enable_cpu_mem_arena, session.enable_mem_pattern,
-//                   session.use_deterministic_compute
+//                   session.enable_mem_reuse, session.use_deterministic_compute
 // -----------------------------------------------------------------------------
 TEST(CApiTest, BoolKeys_AcceptsAllSpellings) {
   // ParseBool accepts: "0", "1", "true", "false", and case-insensitive variants.
@@ -86,6 +86,23 @@ TEST(CApiTest, BoolKey_EnableMemPattern) {
     OrtStatusGuard g{AddOption(opts, "session.enable_mem_pattern", "true")};
     ASSERT_EQ(g.st, nullptr);
     EXPECT_TRUE(opts->value.enable_mem_pattern);
+  }
+  ReleaseOptions(opts);
+}
+
+TEST(CApiTest, BoolKey_EnableMemReuse) {
+  OrtSessionOptions* opts = MakeOptions();
+  ASSERT_TRUE(opts->value.enable_mem_reuse);  // default
+
+  {
+    OrtStatusGuard g{AddOption(opts, "session.enable_mem_reuse", "0")};
+    ASSERT_EQ(g.st, nullptr);
+    EXPECT_FALSE(opts->value.enable_mem_reuse);
+  }
+  {
+    OrtStatusGuard g{AddOption(opts, "session.enable_mem_reuse", "true")};
+    ASSERT_EQ(g.st, nullptr);
+    EXPECT_TRUE(opts->value.enable_mem_reuse);
   }
   ReleaseOptions(opts);
 }
