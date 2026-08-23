@@ -93,6 +93,7 @@ jobs:
           --skip_tests
           --build_shared_lib
           --build_nodejs
+          --target nodejs_binding_wrapper
           ${{ matrix.build_args }}
 
       - name: Test Node binding
