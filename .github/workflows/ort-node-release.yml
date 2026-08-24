@@ -234,6 +234,6 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: >-
-          npm publish npm-package/*.tgz
+          npm publish ./npm-package/*.tgz
           --access public
           --tag "${{ needs.package.outputs.npm_tag }}"
