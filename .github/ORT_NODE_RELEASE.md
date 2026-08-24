@@ -24,7 +24,8 @@ The package's provider metadata pins those libraries to the base ONNX Runtime ve
 Windows WebGPU ARM64 cross-compilation reuses the `llvm-tblgen.exe` and `clang-tblgen.exe` host tools produced by
 the Windows x64 build, matching the official packaging pipeline. Windows builds pin CMake 3.31.6 and macOS builds
 pin CMake 3.31.8, using each platform's upstream workflow version and SHA512 so legacy third-party CMake projects
-remain configurable.
+remain configurable. The CoreML-enabled macOS arm64 artifact targets macOS 15.0 because the current CoreML EP uses
+optimization APIs introduced in that release; the CPU-only macOS x64 artifact continues to target macOS 14.0.
 
 ## Repository setup
 
