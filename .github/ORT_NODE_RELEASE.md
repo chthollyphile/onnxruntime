@@ -8,11 +8,18 @@ const session = await ort.InferenceSession.create(modelPath, {
 });
 ```
 
-The `Build and publish custom ORT Node` workflow builds one CPU package containing native binaries for:
+The `Build and publish custom ORT Node` workflow follows the official Node.js execution-provider matrix:
 
-- Linux x64 and arm64
-- Windows x64 and arm64
-- macOS x64 and arm64
+- Linux x64: CPU, CUDA, TensorRT, and WebGPU
+- Linux arm64: CPU
+- Windows x64 and arm64: CPU, DirectML, and WebGPU
+- macOS x64: CPU
+- macOS arm64: CPU, CoreML, and WebGPU
+
+The Linux x64 core is built with the generic CUDA and TensorRT provider interfaces. As in the official
+`onnxruntime-node` package, its CUDA, TensorRT, and shared provider libraries are downloaded from the matching
+`Microsoft.ML.OnnxRuntime.Gpu.Linux` NuGet package during npm installation instead of being bundled in the tarball.
+The package's provider metadata pins those libraries to the base ONNX Runtime version.
 
 ## Repository setup
 

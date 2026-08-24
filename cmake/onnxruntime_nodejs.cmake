@@ -44,7 +44,9 @@ endif()
 set(NODEJS_DLL_DEPS)
 
 # setup providers
-if (onnxruntime_USE_CUDA)
+# Generic-interface builds use the official prebuilt provider library instead of
+# compiling the provider in-tree, but the Node binding must still expose it.
+if (onnxruntime_USE_CUDA OR onnxruntime_USE_CUDA_INTERFACE)
     set(NODEJS_BINDING_USE_CUDA "--use_cuda")
 endif()
 if (onnxruntime_USE_DML)
@@ -70,7 +72,7 @@ if (onnxruntime_USE_WEBGPU)
         list(APPEND NODEJS_DLL_DEPS "$<TARGET_FILE:dawn::webgpu_dawn>")
     endif()
 endif()
-if (onnxruntime_USE_TENSORRT)
+if (onnxruntime_USE_TENSORRT OR onnxruntime_USE_TENSORRT_INTERFACE)
     set(NODEJS_BINDING_USE_TENSORRT "--use_tensorrt")
 endif()
 if (onnxruntime_USE_COREML)

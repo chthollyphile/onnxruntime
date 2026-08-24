@@ -31,8 +31,43 @@ env:
   NPM_PACKAGE_NAME: "@chthollyphile/onnxruntime-node-folia"
 
 jobs:
+  preflight:
+    name: Verify official binary dependencies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Check base-version binary sources
+        shell: bash
+        run: |
+          ort_version="$(tr -d '\r\n' < VERSION_NUMBER)"
+          metadata_version="$(node -p "require('./js/node/script/install-metadata-versions.js').nuget[0].version")"
+          test "${metadata_version}" = "${ort_version}"
+
+          dml_version="$(sed -n 's/.*id="Microsoft.AI.DirectML" version="\([^"]*\)".*/\1/p' packages.config)"
+          test -n "${dml_version}"
+
+          urls=(
+            "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime.gpu.linux/${ort_version}/microsoft.ml.onnxruntime.gpu.linux.${ort_version}.nupkg"
+            "https://api.nuget.org/v3-flatcontainer/microsoft.ai.directml/${dml_version}/microsoft.ai.directml.${dml_version}.nupkg"
+            "https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.8.2502/dxc_2025_02_20.zip"
+          )
+          for url in "${urls[@]}"; do
+            curl --fail --silent --show-error --location --retry 3 --range 0-0 --output /dev/null "${url}"
+            echo "Verified ${url}"
+          done
+
   build:
     name: Build ${{ matrix.platform }}-${{ matrix.arch }}
+    needs: preflight
     strategy:
       fail-fast: false
       matrix:
@@ -40,27 +75,33 @@ jobs:
           - runner: ubuntu-22.04
             platform: linux
             arch: x64
-            build_args: ""
+            build_args: --use_webgpu --enable_generic_interface
+            expected_backends: cpu,webgpu,cuda,tensorrt
           - runner: ubuntu-22.04-arm
             platform: linux
             arch: arm64
             build_args: ""
+            expected_backends: cpu
           - runner: windows-2022
             platform: win32
             arch: x64
-            build_args: ""
+            build_args: --use_dml --use_webgpu
+            expected_backends: cpu,dml,webgpu
           - runner: windows-11-arm
             platform: win32
             arch: arm64
-            build_args: --arm64
+            build_args: --arm64 --use_dml --use_webgpu
+            expected_backends: cpu,dml,webgpu
           - runner: macos-15-intel
             platform: darwin
             arch: x64
             build_args: --cmake_extra_defines CMAKE_OSX_ARCHITECTURES=x86_64
+            expected_backends: cpu
           - runner: macos-15
             platform: darwin
             arch: arm64
-            build_args: --cmake_extra_defines CMAKE_OSX_ARCHITECTURES=arm64
+            build_args: --use_coreml --use_webgpu --cmake_extra_defines CMAKE_OSX_ARCHITECTURES=arm64
+            expected_backends: cpu,webgpu,coreml
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 240
     env:
@@ -81,7 +122,7 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Build CPU Node binding
+      - name: Build Node binding
         shell: bash
         run: >-
           python tools/ci_build/build.py
@@ -100,6 +141,21 @@ jobs:
         shell: bash
         run: npm --prefix js/node test -- --timeout=90000
 
+      - name: Validate execution-provider matrix
+        shell: bash
+        run: |
+          binding="js/node/bin/napi-v6/${{ matrix.platform }}/${{ matrix.arch }}/onnxruntime_binding.node"
+          node - "${binding}" "${{ matrix.expected_backends }}" <<'NODE'
+          const path = require('node:path');
+          const [bindingPath, expectedCsv] = process.argv.slice(2);
+          const actual = require(path.resolve(bindingPath)).listSupportedBackends().map(({name}) => name);
+          const expected = expectedCsv.split(',');
+          if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+            throw new Error(`Expected backends ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+          }
+          console.log(`Validated backends: ${actual.join(', ')}`);
+          NODE
+
       - name: Stage native files
         shell: bash
         run: |
@@ -114,6 +170,10 @@ jobs:
               ;;
             win32)
               cp -L "${source_dir}/onnxruntime.dll" "${target_dir}/"
+              for dependency in DirectML.dll dxil.dll dxcompiler.dll; do
+                test -f "${source_dir}/${dependency}"
+                cp -L "${source_dir}/${dependency}" "${target_dir}/"
+              done
               ;;
             darwin)
               ort_version="$(tr -d '\r\n' < VERSION_NUMBER)"
@@ -190,6 +250,11 @@ jobs:
           test -f js/node/bin/napi-v6/linux/arm64/libonnxruntime.so.1
           test -f js/node/bin/napi-v6/win32/x64/onnxruntime.dll
           test -f js/node/bin/napi-v6/win32/arm64/onnxruntime.dll
+          for target in win32/x64 win32/arm64; do
+            for dependency in DirectML.dll dxil.dll dxcompiler.dll; do
+              test -f "js/node/bin/napi-v6/${target}/${dependency}"
+            done
+          done
           ort_version="$(tr -d '\r\n' < VERSION_NUMBER)"
           test -f "js/node/bin/napi-v6/darwin/x64/libonnxruntime.${ort_version}.dylib"
           test -f "js/node/bin/napi-v6/darwin/arm64/libonnxruntime.${ort_version}.dylib"
