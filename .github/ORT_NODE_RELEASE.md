@@ -22,8 +22,9 @@ The Linux x64 core is built with the generic CUDA and TensorRT provider interfac
 The package's provider metadata pins those libraries to the base ONNX Runtime version.
 
 Windows WebGPU ARM64 cross-compilation reuses the `llvm-tblgen.exe` and `clang-tblgen.exe` host tools produced by
-the Windows x64 build, matching the official packaging pipeline. Windows and macOS builds pin CMake 3.31.8, the
-version used by the upstream workflows, so legacy third-party CMake projects remain configurable.
+the Windows x64 build, matching the official packaging pipeline. Windows builds pin CMake 3.31.6 and macOS builds
+pin CMake 3.31.8, using each platform's upstream workflow version and SHA512 so legacy third-party CMake projects
+remain configurable.
 
 ## Repository setup
 
