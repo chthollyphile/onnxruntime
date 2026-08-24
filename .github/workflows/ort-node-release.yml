@@ -139,7 +139,7 @@ jobs:
             cp -L "${source_dir}/${dependency}" "${target_dir}/"
           done
 
-          tablegen_dir="build/Release/_deps/dawn-build/third_party/directx-shader-compiler/src/RelWithDebInfo/bin"
+          tablegen_dir="build/${BUILD_CONFIG}/_deps/dawn-build/third_party/directx-shader-compiler/src/${BUILD_CONFIG}/bin"
           for tool in llvm-tblgen.exe clang-tblgen.exe; do
             test -f "${tablegen_dir}/${tool}"
             cp -L "${tablegen_dir}/${tool}" webgpu-host-tools/
